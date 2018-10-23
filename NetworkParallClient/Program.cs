@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
@@ -28,10 +28,9 @@ namespace SocketClient
                 Console.ReadLine();
             }
         }
-        
 
-        static void SendMessageFromSocket(int port)
-        {            
+        static string SendMsg(string msg)
+        {
             // Буфер для входящих данных
             byte[] bytes = new byte[2048];
 
@@ -40,27 +39,34 @@ namespace SocketClient
             // Устанавливаем удаленную точку для сокета
             IPHostEntry ipHost = Dns.GetHostEntry("localhost");
             IPAddress ipAddr = ipHost.AddressList[0];
-            IPEndPoint ipEndPoint = new IPEndPoint(ipAddr, port);
+            IPEndPoint ipEndPoint = new IPEndPoint(ipAddr, 11000);
 
             Socket sender = new Socket(ipAddr.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
             // Соединяем сокет с удаленной точкой
             sender.Connect(ipEndPoint);
 
-            //Console.Write("Введите сообщение: ");
-            string message = "dvc_firstConn";
+            string message = msg;
 
-            Console.WriteLine("Сокет соединяется с {0} ", sender.RemoteEndPoint.ToString());
-            byte[] msg = Encoding.UTF8.GetBytes(message);
+            //Console.WriteLine("Сокет соединяется с {0} ", sender.RemoteEndPoint.ToString());
+            byte[] msga = Encoding.UTF8.GetBytes(message);
 
             // Отправляем данные через сокет
-            int bytesSent = sender.Send(msg);
+            int bytesSent = sender.Send(msga);
 
             // Получаем ответ от сервера
             int bytesRec = sender.Receive(bytes);
 
-            string UserSrcCode = Encoding.UTF8.GetString(bytes, 0, bytesRec);
+            string answ = Encoding.UTF8.GetString(bytes, 0, bytesRec);
 
+            //Освобождаем сокет
+            sender.Shutdown(SocketShutdown.Both);
+            sender.Close();
+            return answ;
+        }
+
+        static void CompileFile(string UserSrcCode)
+        {
             /////////////////////////////////////////////
             ////////////GENERATE execute FILE////////////
             /////////////////////////////////////////////
@@ -69,70 +75,92 @@ namespace SocketClient
                     {"CompilerVersion", "v3.5"}
                 };
             CSharpCodeProvider provider = new CSharpCodeProvider(providerOptions);
-            
+
             //создание директории,если её нет
             if (!Directory.Exists("C:\\11")) { Directory.CreateDirectory("C:\\11"); }
 
             CompilerParameters compilerParams = new CompilerParameters
             { OutputAssembly = "C:\\11\\Foo.EXE", GenerateExecutable = true };
+            compilerParams.ReferencedAssemblies.Add("System.Core.Dll");
 
             // Компиляция 
             CompilerResults results = provider.CompileAssemblyFromSource(compilerParams, UserSrcCode);
-            //richTextBox1.Text += "Compiled\n";
 
             // Выводим информацию об ошибках 
             using (StreamWriter outputFile = new StreamWriter("CompileLog.txt"))
             {
                 outputFile.WriteLine("Number of Errors: {0}", results.Errors.Count);
-                Console.WriteLine("Number of Errors: {0}", results.Errors.Count);
                 foreach (CompilerError err in results.Errors)
                 {
                     //richTextBox1.Text += "ERROR " + err.ErrorText + "\n";
                     outputFile.WriteLine("ERROR {0}", err.ErrorText);
-                    Console.WriteLine("ERROR {0}", err.ErrorText);
                 }
             }
             /////////////////////////////////////////////
             ////////////GENERATE execute FILE////////////
             /////////////////////////////////////////////
+        }
+
+        static void SendMessageFromSocket(int port)
+        {
+            /*
+            * Message types:
+            * dvc_firstConn - first connection
+            * sndAnsw - return result
+            * CountPrc - number of parcels
+            * 67_1 - percent of work
+            */
+            //получаем код программы
+            string UserSrcCode = SendMsg("dvc_firstConn"); 
+            //номер этой машины
+            char number = UserSrcCode[0]; UserSrcCode = UserSrcCode.Substring(1);
+            //отправлять ответ?
+            bool sndRes = (SendMsg("sndAnsw") == "sndRes") ? true : false;
+            //получаем количество посылок
+            string args = SendMsg("CountPrc");
+            
+            if (sndRes) UserSrcCode = "#define result\n" + UserSrcCode;
+            
+            //Компиляция файла
+            CompileFile(UserSrcCode);
 
             Process execProg = new Process();
             ProcessStartInfo msi = new ProcessStartInfo("C:\\11\\Foo.EXE")
             {
                 UseShellExecute = false,
-                CreateNoWindow = true, //false
+                CreateNoWindow = true,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                //Arguments = String.Join(" ", args),
+                Arguments = args,
                 WorkingDirectory = Path.GetDirectoryName("C:\\11\\Foo.EXE"),
                 StandardOutputEncoding = Encoding.UTF8,
                 StandardErrorEncoding = Encoding.UTF8
             };
             //run de process
-            execProg.EnableRaisingEvents = true;
             execProg.StartInfo = msi;
             execProg.Start();
-            if (msi.RedirectStandardOutput) execProg.BeginOutputReadLine();
-            if (msi.RedirectStandardError) execProg.BeginErrorReadLine();
 
+            bool local = false;
+            string res="";
+            while (true)
+            {
+                string output = execProg.StandardOutput.ReadLine();
+                SendMsg(output + "_" + number);
+                Console.WriteLine(output);
+                if (local) res += output + "\n";
+                if (output == "Done") local = true;
+                if (output == null) break;
+            }
+
+            execProg.WaitForExit();
 #if false
             //Console.WriteLine("\nОтвет от сервера: {0}\n\n", Encoding.UTF8.GetString(bytes, 0, bytesRec));
             // Используем рекурсию для неоднократного вызова SendMessageFromSocket()
             //if (message.IndexOf("<TheEnd>") == -1)
             //SendMessageFromSocket(port);
 #endif
-
-            // Освобождаем сокет
-            sender.Shutdown(SocketShutdown.Both);
-            sender.Close();
-
-
-            //while (true)
-            //{
-
-            //}
-        }
-        
+ 
+        }        
     }
 }
