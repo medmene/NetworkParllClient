@@ -65,7 +65,7 @@ namespace SocketClient
             do
             {
                 bytes = stream.Read(data, 0, data.Length);
-                builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                builder.Append(Encoding.UTF8.GetString(data, 0, bytes));
             }
             while (stream.DataAvailable);
 
@@ -76,7 +76,7 @@ namespace SocketClient
 
 #if Multithread
         const int port = 8888;
-        const string address = "192.168.0.83";
+        const string address = /*"192.168.0.83"*/"127.0.0.1";
         static void Main(string[] args)
         {
             TcpClient client = null;
@@ -128,7 +128,7 @@ namespace SocketClient
                     if (output == "Done")
                     {
                         // преобразуем сообщение в массив байтов
-                        byte[] data = Encoding.Unicode.GetBytes("<TheEnd>");
+                        byte[] data = Encoding.UTF8.GetBytes("<TheEnd>");
                         // отправка сообщения
                         stream.Write(data, 0, data.Length);
                         break;
