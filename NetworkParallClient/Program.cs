@@ -54,7 +54,7 @@ namespace SocketClient
         {
 
             // преобразуем сообщение в массив байтов
-            byte[] data = Encoding.Unicode.GetBytes(msg);
+            byte[] data = Encoding.UTF8.GetBytes(msg);
             // отправка сообщения
             stream.Write(data, 0, data.Length);
 
