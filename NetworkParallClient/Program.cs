@@ -8,6 +8,7 @@ using Microsoft.CSharp;
 using System.CodeDom.Compiler;
 using System.IO;
 using System.Diagnostics;
+using System.Threading;
 
 namespace SocketClient
 {
@@ -48,8 +49,7 @@ namespace SocketClient
             ////////////GENERATE execute FILE////////////
             /////////////////////////////////////////////
         }
-
-#if Multithread
+        
         static string SendMsg(NetworkStream stream, string msg)
         {
 
@@ -59,32 +59,29 @@ namespace SocketClient
             stream.Write(data, 0, data.Length);
 
             // получаем ответ
-            data = new byte[2048]; // буфер для получаемых данных
+            data = new byte[5000]; // буфер для получаемых данных
             StringBuilder builder = new StringBuilder();
             int bytes = 0;
-            do
-            {
+            do{
                 bytes = stream.Read(data, 0, data.Length);
                 builder.Append(Encoding.UTF8.GetString(data, 0, bytes));
+                Thread.Sleep(300);
             }
             while (stream.DataAvailable);
 
             msg = builder.ToString();
             return msg;
         }
-#endif
-
-#if Multithread
+        
         const int port = 8888;
         const string address = /*"192.168.0.83"*/"127.0.0.1";
         static void Main(string[] args)
         {
             TcpClient client = null;
             try
-            {
+            {                
                 client = new TcpClient(address, port);
                 NetworkStream stream = client.GetStream();
-
                 /*
                 * Message types:
                 * dvc_firstConn - first connection
@@ -94,82 +91,55 @@ namespace SocketClient
                 */
                 //получаем код программы
                 string UserSrcCode = SendMsg(stream, "dvc_firstConn");
+                Thread.Sleep(300);
                 //номер этой машины
                 char number = UserSrcCode[0]; UserSrcCode = UserSrcCode.Substring(1);
                 //отправлять ответ?
                 bool sndRes = (SendMsg(stream, "sndAnsw") == "sndRes") ? true : false;
+                Thread.Sleep(300);
                 //получаем количество посылок
                 string argss = SendMsg(stream, "CountPrc");
-
+                Thread.Sleep(300);
 
                 //Компиляция файла
                 CompileFile(UserSrcCode);
-
-                Process execProg = new Process();
-                ProcessStartInfo msi = new ProcessStartInfo("C:\\11\\Foo.EXE")
+                Thread.Sleep(3000);
+                //отчёт о компиляции
+                string startWork = SendMsg(stream, "ProgramAssembled");
+                if (startWork == "good")
                 {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    Arguments = argss,
-                    WorkingDirectory = Path.GetDirectoryName("C:\\11\\Foo.EXE"),
-                    StandardOutputEncoding = Encoding.UTF8,
-                    StandardErrorEncoding = Encoding.UTF8
-                };
-                //run de process
-                execProg.StartInfo = msi;
-                execProg.Start();
-
-                while (true)
-                {
-                    string output = execProg.StandardOutput.ReadLine();
-                    if (output == "Done")
+                    Process execProg = new Process();
+                    ProcessStartInfo msi = new ProcessStartInfo("C:\\11\\Foo.EXE")
                     {
-                        // преобразуем сообщение в массив байтов
-                        byte[] data = Encoding.UTF8.GetBytes("<TheEnd>");
-                        // отправка сообщения
-                        stream.Write(data, 0, data.Length);
-                        break;
-                    }
-                    if (output == null) break;
-                    SendMsg(stream, output + "_" + number);
-                    Console.WriteLine(output);
-                }
-
-                //execProg.WaitForExit();
-#if false
-            //Console.WriteLine("\nОтвет от сервера: {0}\n\n", Encoding.UTF8.GetString(bytes, 0, bytesRec));
-            // Используем рекурсию для неоднократного вызова SendMessageFromSocket()
-            //if (message.IndexOf("<TheEnd>") == -1)
-            //SendMessageFromSocket(port);
-                while (true)
-                {
-                    Console.Write(userName + ": ");
-                    // ввод сообщения
-                    string message = Console.ReadLine();
-                    message = String.Format("{0}: {1}", userName, message);
-                    // преобразуем сообщение в массив байтов
-                    byte[] data = Encoding.Unicode.GetBytes(message);
-                    // отправка сообщения
-                    stream.Write(data, 0, data.Length);
- 
-                    // получаем ответ
-                    data = new byte[64]; // буфер для получаемых данных
-                    StringBuilder builder = new StringBuilder();
-                    int bytes = 0;
-                    do
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        Arguments = argss,
+                        WorkingDirectory = Path.GetDirectoryName("C:\\11\\Foo.EXE"),
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    };
+                    //run de process
+                    execProg.StartInfo = msi;
+                    execProg.Start();
+                    while (true)
                     {
-                        bytes = stream.Read(data, 0, data.Length);
-                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                        string output = execProg.StandardOutput.ReadLine();
+                        if (output == "Done")
+                        {
+                            // преобразуем сообщение в массив байтов
+                            byte[] data = Encoding.UTF8.GetBytes("<TheEnd>");
+                            // отправка сообщения
+                            stream.Write(data, 0, data.Length);
+                            break;
+                        }
+                        if (output == null) break;
+                        SendMsg(stream, output + "_" + number);
+                        Console.WriteLine(output);
                     }
-                    while (stream.DataAvailable);
- 
-                    message = builder.ToString();
-                    Console.WriteLine("Сервер: {0}", message);
-                }
-#endif                
+                }   
             }
             catch (Exception ex)
             {
@@ -177,9 +147,13 @@ namespace SocketClient
             }
             finally
             {
-                client.Close();
+                try
+                {
+                    client.Close();
+                }
+                catch { }
             }
         }
-#endif
+
     }
 }
